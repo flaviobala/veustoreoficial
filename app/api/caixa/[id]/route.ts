@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 
-// Tipagem genérica para o contexto
-type Context = { params: { id: string } }
-
-export async function PUT(req: NextRequest, context: Context) {
+export async function PUT(req: NextRequest, context: any) {
   try {
     const id = Number(context.params.id);
     const body = await req.json();
@@ -40,7 +37,7 @@ export async function PUT(req: NextRequest, context: Context) {
   }
 }
 
-export async function DELETE(req: NextRequest, context: Context) {
+export async function DELETE(req: NextRequest, context: any) {
   try {
     const id = Number(context.params.id);
     const movimentoExistente = await prisma.caixa.findUnique({ where: { id } });
@@ -60,6 +57,7 @@ export async function DELETE(req: NextRequest, context: Context) {
     return NextResponse.json({ error: "Erro interno ao excluir movimento." }, { status: 500 });
   }
 }
+
 
 
 // //app/api/caixa/[id]/route.ts
