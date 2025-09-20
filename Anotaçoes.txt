@@ -1,0 +1,1591 @@
+"use client";
+//app/admin/dashboard/cards.tsx
+import { useEffect, useState } from "react";
+
+type Produto = {
+  quantidade: number;
+};
+
+type Venda = {
+  preco: number;
+};
+
+export default function DashboardCards() {
+  const [totalEstoque, setTotalEstoque] = useState(0);
+  const [totalVendas, setTotalVendas] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/produtos")
+      .then((res) => res.json())
+      .then((produtos: Produto[]) => {
+        const total = produtos.reduce((acc, p) => acc + p.quantidade, 0);
+        setTotalEstoque(total);
+      });
+
+    fetch("/api/vendas")
+      .then((res) => res.json())
+      .then((vendas: Venda[]) => {
+        const total = vendas.reduce((acc, v) => acc + Number(v.preco), 0);
+        setTotalVendas(total);
+      });
+  }, []);
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 text-gray-700 pr-4">
+      <div className="bg-white shadow-lg rounded-2xl p-5 border-l-4 border-pink-400">
+        <h3 className="text-sm font-semibold text-pink-600">Total de Vendas</h3>
+        <p className="text-2xl font-bold text-pink-800 mt-1">
+          R$ {totalVendas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </p>
+      </div>
+
+      <div className="bg-white shadow-lg rounded-2xl p-5 border-l-4 border-yellow-400">
+        <h3 className="text-sm font-semibold text-yellow-600">Total em Estoque</h3>
+        <p className="text-2xl font-bold text-yellow-800 mt-1">{totalEstoque} itens</p>
+      </div>
+
+      {/* Terceiro card opcional */}
+      <div className="bg-white shadow-lg rounded-2xl p-5 border-l-4 border-gray-400">
+        <h3 className="text-sm font-semibold text-gray-600">Status Geral</h3>
+        <p className="text-base mt-1 text-gray-700">Painel atualizado</p>
+      </div>
+    </div>
+  );
+}
+
+"use client";
+//app/admin/dashboard/estoque/page.tsx
+import { useEffect, useState } from "react";
+import { Pencil, Trash, Package, Plus, Save, X } from "lucide-react";
+
+type Produto = {
+  id: number;
+  nome: string;
+  quantidade: number;
+  preco: number | string;
+};
+
+export default function EstoquePage() {
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editando, setEditando] = useState<Produto | null>(null);
+
+  const [nome, setNome] = useState("");
+  const [quantidade, setQuantidade] = useState(0);
+  const [preco, setPreco] = useState(0);
+
+  useEffect(() => {
+    carregarProdutos();
+  }, []);
+
+  async function carregarProdutos() {
+    try {
+      const res = await fetch("/api/produtos");
+      const data = await res.json();
+      setProdutos(data || []);
+    } catch (error) {
+      setProdutos([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleEditar(p: Produto) {
+    setEditando(p);
+    setNome(p.nome);
+    setQuantidade(Number(p.quantidade));
+    setPreco(Number(p.preco));
+  }
+
+  function cancelarEdicao() {
+    setEditando(null);
+    setNome("");
+    setQuantidade(0);
+    setPreco(0);
+  }
+
+  async function handleSalvar() {
+    if (!nome.trim()) {
+      alert("Nome é obrigatório");
+      return;
+    }
+
+    const dados = {
+      nome: nome.trim(),
+      quantidade,
+      preco,
+    };
+
+    try {
+      if (editando) {
+        const res = await fetch(`/api/produtos/${editando.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(dados),
+        });
+        
+        if (res.ok) {
+          const atualizado = await res.json();
+          setProdutos(produtos.map(p => p.id === atualizado.id ? atualizado : p));
+          cancelarEdicao();
+        } else {
+          alert("Erro ao atualizar produto");
+        }
+      } else {
+        const res = await fetch("/api/produtos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(dados),
+        });
+        
+        if (res.ok) {
+          const criado = await res.json();
+          setProdutos([...produtos, criado]);
+          setNome("");
+          setQuantidade(0);
+          setPreco(0);
+        } else {
+          alert("Erro ao adicionar produto");
+        }
+      }
+    } catch (error) {
+      alert("Erro na operação");
+    }
+  }
+
+  async function handleExcluir(id: number) {
+    if (!confirm("Confirma exclusão?")) return;
+    
+    try {
+      const res = await fetch(`/api/produtos/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setProdutos(produtos.filter(p => p.id !== id));
+        if (editando?.id === id) cancelarEdicao();
+      } else {
+        alert("Erro ao excluir produto");
+      }
+    } catch (error) {
+      alert("Erro ao excluir produto");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex items-center gap-3 bg-white rounded-xl p-6 shadow-lg border border-pink-200">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-600"></div>
+          <span className="text-pink-700 font-medium">Carregando produtos...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const totalProdutos = produtos.length;
+  const valorTotal = produtos.reduce((acc, p) => acc + (Number(p.preco) * Number(p.quantidade)), 0);
+
+  return (
+    <div className="p-6 bg-gradient-to-br from-pink-50 to-purple-50 min-h-screen">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="text-center">
+          <div className="inline-flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-2xl px-6 py-4 shadow-lg border border-pink-200 mb-4">
+            <Package className="text-pink-600" size={28} />
+            <h1 className="text-2xl font-bold text-pink-700">Controle de Estoque</h1>
+          </div>
+          <p className="text-gray-600">
+            {editando ? "Editando produto selecionado" : "Gerencie seus produtos"}
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-pink-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-pink-500 p-2 rounded-lg">
+                <Package className="text-white" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Produtos</p>
+                <p className="text-xl font-bold text-pink-700">{totalProdutos}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-purple-500 p-2 rounded-lg">
+                <span className="text-white font-bold">R$</span>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Valor Total</p>
+                <p className="text-xl font-bold text-purple-700">R$ {valorTotal.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-rose-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-rose-500 p-2 rounded-lg">
+                {editando ? <Pencil className="text-white" size={20} /> : <Plus className="text-white" size={20} />}
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Status</p>
+                <p className="text-xl font-bold text-rose-700">{editando ? "Editando" : "Pronto"}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          
+          {/* Formulário */}
+          <div className="lg:col-span-1">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-pink-200 sticky top-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-gradient-to-r from-pink-500 to-purple-500 p-2 rounded-lg">
+                  {editando ? <Pencil className="text-white" size={18} /> : <Plus className="text-white" size={18} />}
+                </div>
+                <h2 className="font-bold text-pink-700">
+                  {editando ? "Editar" : "Novo Produto"}
+                </h2>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-pink-700 mb-1">Nome</label>
+                  <input
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    placeholder="Nome do produto"
+                    className="w-full border-2 border-pink-200 rounded-lg px-3 py-2 bg-pink-50/50 text-pink-900 focus:outline-none focus:border-pink-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-pink-700 mb-1">Quantidade</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={quantidade}
+                    onChange={(e) => setQuantidade(Number(e.target.value))}
+                    className="w-full border-2 border-pink-200 rounded-lg px-3 py-2 bg-pink-50/50 text-pink-900 focus:outline-none focus:border-pink-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-pink-700 mb-1">Preço (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={preco}
+                    onChange={(e) => setPreco(Number(e.target.value))}
+                    className="w-full border-2 border-pink-200 rounded-lg px-3 py-2 bg-pink-50/50 text-pink-900 focus:outline-none focus:border-pink-400 transition-colors"
+                  />
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSalvar}
+                    className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500 text-white px-4 py-2 rounded-lg font-medium hover:from-pink-600 hover:to-purple-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    {editando ? <Save size={16} /> : <Plus size={16} />}
+                    {editando ? "Salvar" : "Adicionar"}
+                  </button>
+
+                  {editando && (
+                    <button
+                      onClick={cancelarEdicao}
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-400 transition-colors flex items-center gap-2"
+                    >
+                      <X size={16} />
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista */}
+          <div className="lg:col-span-3">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-pink-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-pink-500 to-purple-500 p-4">
+                <h2 className="font-bold text-white flex items-center gap-2">
+                  <Package size={20} />
+                  Produtos Cadastrados ({totalProdutos})
+                </h2>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-pink-100">
+                    <tr>
+                      <th className="p-3 text-left font-medium text-pink-800">Produto</th>
+                      <th className="p-3 text-left font-medium text-pink-800">Qtd</th>
+                      <th className="p-3 text-left font-medium text-pink-800">Preço</th>
+                      <th className="p-3 text-center font-medium text-pink-800">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {produtos.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center p-8">
+                          <div className="flex flex-col items-center gap-3">
+                            <Package className="text-pink-300" size={40} />
+                            <p className="text-pink-600 font-medium">Nenhum produto cadastrado</p>
+                            <p className="text-pink-400 text-sm">Use o formulário ao lado para adicionar</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      produtos.map((produto, index) => (
+                        <tr
+                          key={produto.id}
+                          className={`border-t border-pink-200 hover:bg-pink-50 transition-colors ${
+                            editando?.id === produto.id ? 'bg-yellow-50' : ''
+                          }`}
+                        >
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-gradient-to-r from-pink-400 to-purple-400 w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                                {index + 1}
+                              </div>
+                              <span className="font-medium text-pink-900">{produto.nome}</span>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <span className={`px-2 py-1 rounded text-sm font-medium ${
+                              Number(produto.quantidade) > 10 
+                                ? 'bg-green-100 text-green-800' 
+                                : Number(produto.quantidade) > 5 
+                                ? 'bg-yellow-100 text-yellow-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {produto.quantidade}
+                            </span>
+                          </td>
+                          <td className="p-3 font-semibold text-pink-900">
+                            R$ {Number(produto.preco).toFixed(2)}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex justify-center gap-2">
+                              <button
+                                onClick={() => handleEditar(produto)}
+                                className="bg-blue-100 text-blue-600 p-2 rounded hover:bg-blue-200 transition-colors"
+                                title="Editar"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleExcluir(produto.id)}
+                                className="bg-red-100 text-red-600 p-2 rounded hover:bg-red-200 transition-colors"
+                                title="Excluir"
+                              >
+                                <Trash size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+'use client';
+//app/admin/dashboard/vendas/page.tsx
+import { useEffect, useState } from "react";
+import { DollarSign, ShoppingCart, Users, Pencil, Trash, Plus, Save, X } from "lucide-react"; // Importando ícones relevantes para vendas
+import { ToastContainer, toast } from "react-toastify"; // Importando Toastify
+import "react-toastify/dist/ReactToastify.css"; // Importe o CSS do Toastify
+
+// Definição do tipo para um Produto, necessário para a lógica de vendas
+type Produto = {
+  id: number;
+  nome: string;
+  quantidade: number; // Quantidade em estoque
+  preco: number; // Preço unitário do produto
+};
+
+// Definição do tipo para uma Venda. Ajuste conforme sua estrutura de dados real no DB.
+// Este tipo de Venda inclui as informações do produto associado.
+type Venda = {
+  id: number;
+  cliente: string;
+  produtoId: number; // ID do produto vendido
+  produto?: Produto; // Informações do produto (opcional, pode ser carregado separadamente ou unido)
+  quantidade: number; // Quantidade de itens do produto vendidos nesta venda
+  precoTotal: number; // Preço total da venda (quantidade * preco_unitario do produto na venda)
+  dataVenda: string; // Formato de data, e.g., 'YYYY-MM-DD'
+  status: 'Concluída' | 'Pendente' | 'Cancelada';
+  criadoEm?: string; // Adicionado para compatibilidade com o seu código anterior de vendas
+};
+
+export default function VendasPage() {
+  const [vendas, setVendas] = useState<Venda[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]); // Estado para armazenar produtos do estoque
+  const [loading, setLoading] = useState(true);
+  const [editandoVenda, setEditandoVenda] = useState<Venda | null>(null);
+
+  // Estados para o formulário de nova/edição de venda
+  const [cliente, setCliente] = useState("");
+  const [produtoId, setProdutoId] = useState<number | string>(""); // Agora armazena o ID do produto
+  const [quantidadeVendida, setQuantidadeVendida] = useState<number>(1);
+  const [precoTotalVenda, setPrecoTotalVenda] = useState<number>(0); // Preço total calculado da venda
+  const [dataVenda, setDataVenda] = useState("");
+  const [status, setStatus] = useState<Venda['status']>('Concluída');
+
+  useEffect(() => {
+    carregarDados();
+    // TESTE IMPORTANTE: Este toast DEVE aparecer quando a página carrega
+    toast.success("Página de vendas carregada!"); 
+  }, []);
+
+  async function carregarDados() {
+    try {
+      setLoading(true);
+      // Carregar produtos (necessário para o dropdown e validação de estoque)
+      const resProdutos = await fetch("/api/produtos");
+      const dataProdutos = await resProdutos.json();
+      // Explicitamente converte 'preco' e 'quantidade' para Number
+      const parsedProdutos: Produto[] = dataProdutos.map((p: any) => ({
+        ...p,
+        quantidade: Number(p.quantidade), // Garante que quantidade é um número
+        preco: Number(p.preco),           // Garante que preco é um número
+      }));
+      setProdutos(parsedProdutos || []);
+
+      // Carregar vendas
+      const resVendas = await fetch("/api/vendas");
+      const dataVendas = await resVendas.json();
+      // Explicitamente converte 'preco' (da API) para 'precoTotal' (do nosso tipo Venda) e 'quantidade' para Number
+      const vendasComProduto: Venda[] = dataVendas.map((v: any) => {
+        const produtoAssociado = parsedProdutos.find((p: Produto) => p.id === v.produtoId);
+        // Formata dataVenda para o formato "YYYY-MM-DD" esperado pelo input type="date"
+        const formattedDataVenda = v.criadoEm ? new Date(v.criadoEm).toISOString().split('T')[0] : '';
+
+        return {
+          ...v,
+          // Mapeia 'preco' da API para 'precoTotal' no tipo do frontend e converte para número
+          precoTotal: Number(v.preco),
+          quantidade: Number(v.quantidade), // Garante que quantidade da venda é um número
+          produto: produtoAssociado, // Garante que o produto associado é anexado
+          
+          // Adiciona valores padrão para campos ausentes da API:
+          cliente: v.cliente || 'Cliente Não Informado', // Padrão se 'cliente' não vier da API
+          status: v.status || 'Concluída', // Padrão 'Concluída' se 'status' não vier da API
+          dataVenda: v.dataVenda || formattedDataVenda, // Padrão do 'criadoEm' formatado se 'dataVenda' não vier
+        };
+      });
+      setVendas(vendasComProduto || []);
+
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+      setProdutos([]);
+      setVendas([]);
+      toast.error("Erro ao carregar dados. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Efeito para calcular o preço total da venda quando produtoId ou quantidadeVendida muda
+  useEffect(() => {
+    const produtoSelecionado = produtos.find(p => p.id === Number(produtoId));
+    if (produtoSelecionado && quantidadeVendida > 0) {
+      setPrecoTotalVenda(produtoSelecionado.preco * quantidadeVendida);
+    } else {
+      setPrecoTotalVenda(0);
+    }
+  }, [produtoId, quantidadeVendida, produtos]);
+
+
+  function handleEditar(v: Venda) {
+    setEditandoVenda(v);
+    setCliente(v.cliente);
+    setProdutoId(v.produtoId);
+    setQuantidadeVendida(v.quantidade);
+    setPrecoTotalVenda(v.precoTotal);
+    setDataVenda(v.dataVenda);
+    setStatus(v.status);
+  }
+
+  function cancelarEdicao() {
+    setEditandoVenda(null);
+    setCliente("");
+    setProdutoId("");
+    setQuantidadeVendida(1);
+    setPrecoTotalVenda(0);
+    setDataVenda("");
+    setStatus('Concluída');
+  }
+
+  async function handleSalvar() {
+  if (!cliente.trim() || !produtoId || quantidadeVendida <= 0 || !dataVenda.trim()) {
+    toast.error("Preencha todos os campos obrigatórios.");
+    return;
+  }
+
+  const produtoAtualNoEstoque = produtos.find(p => p.id === Number(produtoId));
+  if (!produtoAtualNoEstoque) {
+    toast.error("Produto selecionado não encontrado no estoque.");
+    return;
+  }
+
+  // Validação de estoque antes de salvar/atualizar
+  if (quantidadeVendida > produtoAtualNoEstoque.quantidade) {
+    toast.error(`Estoque insuficiente! Disponível: ${produtoAtualNoEstoque.quantidade}`);
+    return;
+  }
+
+  const dadosParaEnvio = {
+    cliente: cliente.trim(),
+    produtoId: Number(produtoId),
+    quantidade: quantidadeVendida,
+    precoTotal: precoTotalVenda, // Usar o valor calculado
+    dataVenda: dataVenda,
+    status: status,
+  };
+
+  try {
+    let res;
+    let vendaProcessada;
+
+    if (editandoVenda) {
+      res = await fetch(`/api/vendas/${editandoVenda.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dadosParaEnvio),
+      });
+
+      if (res.ok) {
+        vendaProcessada = await res.json();
+        // Atualiza a lista com o produto anexado para exibição
+        const atualizadaComProduto = { ...vendaProcessada, produto: produtoAtualNoEstoque };
+        setVendas(vendas.map(v => v.id === atualizadaComProduto.id ? atualizadaComProduto : v));
+        toast.success("Venda atualizada com sucesso!");
+
+        // --- LÓGICA E DEBUG DE ALERTA DE ESTOQUE BAIXO (EDIÇÃO) ---
+        // Verificamos o estoque teórico após a edição
+        const estoqueAposEdicaoTeorica = produtoAtualNoEstoque.quantidade - quantidadeVendida;
+        console.log("--- Debug de Estoque Baixo (APÓS EDIÇÃO BEM-SUCEDIDA) ---");
+        console.log("Estoque do Produto (antes da edição):", produtoAtualNoEstoque.quantidade);
+        console.log("Quantidade Editada/Vendida:", quantidadeVendida);
+        console.log("Estoque Teórico Final:", estoqueAposEdicaoTeorica);
+        console.log("Condição (Estoque Teórico Final <= 5):", estoqueAposEdicaoTeorica <= 5);
+
+        if (estoqueAposEdicaoTeorica <= 5) {
+          toast.warning("⚠ Estoque baixo! Reponha o produto após esta edição de venda.");
+        }
+
+      } else {
+        toast.error("Erro ao atualizar venda.");
+      }
+    } else { // Nova Venda (POST)
+      res = await fetch("/api/vendas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dadosParaEnvio),
+      });
+
+      if (res.ok) {
+        vendaProcessada = await res.json();
+        // Adiciona à lista com o produto anexado para exibição
+        const criadaComProduto = { ...vendaProcessada, produto: produtoAtualNoEstoque };
+        setVendas((prev) => [criadaComProduto, ...prev]);
+        toast.success("Venda registrada com sucesso!");
+
+        // --- LÓGICA E DEBUG DE ALERTA DE ESTOQUE BAIXO (NOVA VENDA) ---
+        // Verificamos o estoque teórico após a venda
+        const estoqueAposVendaTeorica = produtoAtualNoEstoque.quantidade - quantidadeVendida;
+        console.log("--- Debug de Estoque Baixo (APÓS NOVA VENDA BEM-SUCEDIDA) ---");
+        console.log("Estoque do Produto (antes da venda):", produtoAtualNoEstoque.quantidade);
+        console.log("Quantidade Vendida:", quantidadeVendida);
+        console.log("Estoque Teórico Final:", estoqueAposVendaTeorica);
+        console.log("Condição (Estoque Teórico Final <= 5):", estoqueAposVendaTeorica <= 5);
+
+        if (estoqueAposVendaTeorica <= 5) {
+          toast.warning("⚠ Estoque baixo! Reponha o produto após esta venda.");
+        }
+      } else {
+        toast.error("Erro ao adicionar venda.");
+      }
+    }
+    cancelarEdicao(); // Limpa formulário após sucesso
+
+    // Recarregar produtos para refletir a mudança de estoque
+    carregarDados();
+
+  } catch (error) {
+    console.error("Erro na operação de vendas (bloco catch):", error); // Renomeei para maior clareza
+    toast.error("Erro na operação de vendas. Verifique sua conexão.");
+  }
+}
+
+  async function handleExcluir(id: number) {
+    if (!confirm("Confirma exclusão desta venda?")) return;
+    
+    try {
+      const res = await fetch(`/api/vendas/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setVendas(vendas.filter(v => v.id !== id));
+        if (editandoVenda?.id === id) cancelarEdicao();
+        toast.success("Venda excluída com sucesso!");
+        // Recarregar produtos para refletir o estoque, se a exclusão devolver ao estoque
+        carregarDados(); 
+      } else {
+        toast.error("Erro ao excluir venda.");
+      }
+    } catch (error) {
+      console.error("Erro ao excluir venda:", error);
+      toast.error("Erro ao excluir venda. Verifique sua conexão.");
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="flex items-center gap-3 bg-white rounded-xl p-6 shadow-lg border border-purple-200">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+          <span className="text-purple-700 font-medium">Carregando dados...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Estatísticas de vendas
+  const totalVendasConcluidas = vendas.filter(v => v.status === 'Concluída').length;
+  const faturamentoTotal = vendas.reduce((acc, v) => acc + (Number(v.precoTotal)), 0);
+  const mediaPorVenda = totalVendasConcluidas > 0 ? faturamentoTotal / totalVendasConcluidas : 0;
+  const vendasPendentes = vendas.filter(v => v.status === 'Pendente').length;
+
+  return (
+    <div className="p-6 bg-gradient-to-br from-pink-50 to-purple-50 min-h-screen">
+      {/* ATENÇÃO AQUI: autoClose está definido como false para o teste */}
+      <ToastContainer position="top-right" autoClose={false} /> 
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header da Página de Vendas */}
+        <div className="text-center">
+          <div className="inline-flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-2xl px-6 py-4 shadow-lg border border-purple-200 mb-4">
+            <ShoppingCart className="text-purple-600" size={28} />
+            <h1 className="text-2xl font-bold text-purple-700">Controle de Vendas</h1>
+          </div>
+          <p className="text-gray-600">
+            {editandoVenda ? "Editando registro de venda" : "Gerencie e registre suas vendas aqui"}
+          </p>
+        </div>
+
+        {/* Cards de Estatísticas de Vendas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-purple-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-purple-500 p-2 rounded-lg">
+                <ShoppingCart className="text-white" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Total Vendas Concluídas</p>
+                <p className="text-xl font-bold text-purple-700">{totalVendasConcluidas}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-pink-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-pink-500 p-2 rounded-lg">
+                <DollarSign className="text-white" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Faturamento Total</p>
+                <p className="text-xl font-bold text-pink-700">R$ {faturamentoTotal.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-indigo-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-500 p-2 rounded-lg">
+                <DollarSign className="text-white" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Média por Venda</p>
+                <p className="text-xl font-bold text-indigo-700">R$ {mediaPorVenda.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-rose-200">
+            <div className="flex items-center gap-3">
+              <div className="bg-rose-500 p-2 rounded-lg">
+                <Users className="text-white" size={20} />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">Vendas Pendentes</p>
+                <p className="text-xl font-bold text-rose-700">{vendasPendentes}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          
+          {/* Formulário de Nova/Edição de Venda */}
+          <div className="lg:col-span-1">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-purple-200 sticky top-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-gradient-to-r from-purple-500 to-indigo-500 p-2 rounded-lg">
+                  {editandoVenda ? <Pencil className="text-white" size={18} /> : <Plus className="text-white" size={18} />}
+                </div>
+                <h2 className="font-bold text-purple-700">
+                  {editandoVenda ? "Editar Venda" : "Nova Venda"}
+                </h2>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">Cliente</label>
+                  <input
+                    value={cliente}
+                    onChange={(e) => setCliente(e.target.value)}
+                    placeholder="Nome do cliente"
+                    className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 bg-purple-50/50 text-purple-900 focus:outline-none focus:border-purple-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">Produto</label>
+                  <select
+                    value={produtoId}
+                    onChange={(e) => setProdutoId(e.target.value)}
+                    className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 bg-purple-50/50 text-purple-900 focus:outline-none focus:border-purple-400 transition-colors"
+                  >
+                    <option value="">Selecione um produto</option>
+                    {produtos.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.nome} (Estoque: {p.quantidade})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">Quantidade</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantidadeVendida}
+                    onChange={(e) => setQuantidadeVendida(Number(e.target.value))}
+                    className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 bg-purple-50/50 text-purple-900 focus:outline-none focus:border-purple-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">Preço Total (R$)</label>
+                  <input
+                    type="text" // Alterado para text pois é apenas exibição
+                    readOnly
+                    value={`R$ ${precoTotalVenda.toFixed(2)}`}
+                    className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 bg-purple-50/50 text-purple-900 focus:outline-none focus:border-purple-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">Data da Venda</label>
+                  <input
+                    type="date"
+                    value={dataVenda}
+                    onChange={(e) => setDataVenda(e.target.value)}
+                    className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 bg-purple-50/50 text-purple-900 focus:outline-none focus:border-purple-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-purple-700 mb-1">Status</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as Venda['status'])}
+                    className="w-full border-2 border-purple-200 rounded-lg px-3 py-2 bg-purple-50/50 text-purple-900 focus:outline-none focus:border-purple-400 transition-colors"
+                  >
+                    <option value="Concluída">Concluída</option>
+                    <option value="Pendente">Pendente</option>
+                    <option value="Cancelada">Cancelada</option>
+                  </select>
+                </div>
+
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSalvar}
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-4 py-2 rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    {editandoVenda ? <Save size={16} /> : <Plus size={16} />}
+                    {editandoVenda ? "Salvar" : "Adicionar"}
+                  </button>
+
+                  {editandoVenda && (
+                    <button
+                      onClick={cancelarEdicao}
+                      className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-400 transition-colors flex items-center gap-2"
+                    >
+                      <X size={16} />
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista de Vendas */}
+          <div className="lg:col-span-3">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-purple-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-500 to-indigo-500 p-4">
+                <h2 className="font-bold text-white flex items-center gap-2">
+                  <ShoppingCart size={20} />
+                  Vendas Registradas ({vendas.length})
+                </h2>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-purple-100">
+                    <tr>
+                      <th className="p-3 text-left font-medium text-purple-800">Cliente</th>
+                      <th className="p-3 text-left font-medium text-purple-800">Produto</th>
+                      <th className="p-3 text-left font-medium text-purple-800">Qtd Vendida</th>
+                      <th className="p-3 text-left font-medium text-purple-800">Preço Total</th>
+                      <th className="p-3 text-left font-medium text-purple-800">Data</th>
+                      <th className="p-3 text-left font-medium text-purple-800">Status</th>
+                      <th className="p-3 text-center font-medium text-purple-800">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendas.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center p-8">
+                          <div className="flex flex-col items-center gap-3">
+                            <ShoppingCart className="text-purple-300" size={40} />
+                            <p className="text-purple-600 font-medium">Nenhuma venda registrada ainda</p>
+                            <p className="text-purple-400 text-sm">Use o formulário ao lado para adicionar uma nova venda</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      vendas.map((venda, index) => (
+                        <tr
+                          key={venda.id}
+                          className={`border-t border-purple-200 hover:bg-purple-50 transition-colors ${
+                            editandoVenda?.id === venda.id ? 'bg-yellow-50' : ''
+                          }`}
+                        >
+                          <td className="p-3 font-medium text-purple-900">{venda.cliente}</td>
+                          <td className="p-3 text-purple-800">{venda.produto?.nome || "Produto Não Encontrado"}</td>
+                          <td className="p-3 text-purple-800">{venda.quantidade}</td>
+                          <td className="p-3 font-semibold text-purple-900">
+                            R$ {Number(venda.precoTotal).toFixed(2)}
+                          </td>
+                          <td className="p-3 text-sm text-gray-700">{venda.dataVenda}</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                              venda.status === 'Concluída' ? 'bg-green-100 text-green-800' :
+                              venda.status === 'Pendente' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {venda.status}
+                            </span>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex justify-center gap-2">
+                              <button
+                                onClick={() => handleEditar(venda)}
+                                className="bg-blue-100 text-blue-600 p-2 rounded hover:bg-blue-200 transition-colors"
+                                title="Editar"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                onClick={() => handleExcluir(venda.id)}
+                                className="bg-red-100 text-red-600 p-2 rounded hover:bg-red-200 transition-colors"
+                                title="Excluir"
+                              >
+                                <Trash size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// app/(admin)/dashboard/page.tsx
+'use client'; // Mantenha este para usar hooks como useState e useEffect
+import { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
+import DashboardCards from '../../(admin)/dashboard/cards'; // Caminho para o seu DashboardCards
+
+// Defina os tipos de dados para os dados fictícios que ainda não têm API
+type DailySalesData = {
+  day: string;
+  vendas: number;
+  meta: number;
+};
+
+type CategoryData = {
+  name: string;
+  value: number;
+  color: string;
+};
+
+type TopProduct = {
+  name: string;
+  sales: number;
+  image: string;
+  trend: string;
+  color: string;
+};
+
+export default function DashboardPage() {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Dados mockados (fictícios) para os gráficos.
+  // Você precisará substituir estes por chamadas de API reais como discutimos anteriormente.
+  const salesData: DailySalesData[] = [
+    { day: 'Seg', vendas: 2400, meta: 3000 },
+    { day: 'Ter', vendas: 1398, meta: 3000 },
+    { day: 'Qua', vendas: 9800, meta: 3000 },
+    { day: 'Qui', vendas: 3908, meta: 3000 },
+    { day: 'Sex', vendas: 4800, meta: 3000 },
+    { day: 'Sáb', vendas: 3800, meta: 3000 },
+    { day: 'Dom', vendas: 4300, meta: 3000 },
+  ];
+
+  const categoryData: CategoryData[] = [
+    { name: 'Vestidos', value: 400, color: '#ec4899' },
+    { name: 'Blusas', value: 300, color: '#f97316' },
+    { name: 'Calças', value: 200, color: '#8b5cf6' },
+    { name: 'Acessórios', value: 100, color: '#06b6d4' },
+  ];
+
+  const topProducts: TopProduct[] = [
+    { name: 'Vestido Floral Rosa', sales: 45, image: '👗', trend: '+12%', color: 'from-pink-500 to-rose-500' },
+    { name: 'Blusa Manga Longa', sales: 38, image: '👚', trend: '+8%', color: 'from-purple-500 to-indigo-500' },
+    { name: 'Calça Jeans Premium', sales: 32, image: '👖', trend: '+15%', color: 'from-blue-500 to-cyan-500' },
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Componentes Auxiliares (mantidos aqui para simplicidade, mas podem ser movidos para _components)
+  function MetricCard({ title, value, change, icon, color }: { title: string; value: string; change: string; icon: string; color: string }) {
+    return (
+      <div className={`bg-gradient-to-r ${color} text-white p-5 rounded-2xl shadow-lg flex items-center justify-between`}>
+        <div>
+          <h3 className="text-sm font-semibold opacity-80">{title}</h3>
+          <p className="text-2xl font-bold mt-1">{value}</p>
+          <p className="text-xs opacity-70">{change}</p>
+        </div>
+        <span className="text-4xl opacity-70">{icon}</span>
+      </div>
+    );
+  }
+
+  function AlertItem({ icon, text, color }: { icon: string; text: string; color: string }) {
+    return (
+      <div className={`flex items-start p-4 rounded-xl ${color} text-sm`}>
+        <span className="text-xl mr-3">{icon}</span>
+        <p>{text}</p>
+      </div>
+    );
+  }
+
+  function QuickAction({ icon, text, color }: { icon: string; text: string; color: string }) {
+    return (
+      <button className={`flex flex-col items-center justify-center p-4 rounded-xl shadow-md transition-all duration-200 ${color} text-white hover:scale-105`}>
+        <span className="text-3xl mb-2">{icon}</span>
+        <span className="text-sm font-medium text-center">{text}</span>
+      </button>
+    );
+  }
+
+  function VipClient({ name, purchases, avatar, level }: { name: string; purchases: number; avatar: string; level: string }) {
+    return (
+      <div className="flex items-center gap-4 p-3 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
+        <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-xl">{avatar}</div>
+        <div>
+          <p className="font-semibold text-gray-800">{name}</p>
+          <p className="text-sm text-gray-500">{purchases} compras</p>
+        </div>
+        <span className="ml-auto text-xs font-semibold px-2 py-1 rounded-full bg-yellow-200 text-yellow-800">{level}</span>
+      </div>
+    );
+  }
+
+  function Activity({ time, text, icon }: { time: string; text: string; icon: string }) {
+    return (
+      <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+        <span className="text-xl">{icon}</span>
+        <div>
+          <p className="text-gray-700 text-sm">{text}</p>
+          <p className="text-gray-500 text-xs">{time}</p>
+        </div>
+      </div>
+    );
+  }
+
+
+  return (
+    <div className="space-y-6">
+      {/* Header de Boas-vindas */}
+      <div className="bg-gradient-to-r from-white/80 to-pink-50/80 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-pink-200/50">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              Olá, Verônica! ✨
+            </h1>
+            <p className="text-lg text-gray-600 mb-4">Que tal começarmos este dia com vendas incríveis?</p>
+            <div className="flex items-center gap-6 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-gray-600">Sistema Online</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🌤️</span>
+                <span className="text-gray-600">25°C - Perfeito para vendas!</span>
+              </div>
+              <div className="text-gray-500">
+                {currentTime.toLocaleDateString('pt-BR')} - {currentTime.toLocaleTimeString('pt-BR')}
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="bg-gradient-to-r from-pink-500 to-purple-500 text-white px-6 py-3 rounded-2xl shadow-lg">
+              <div className="text-sm opacity-90">Meta do Mês</div>
+              <div className="text-2xl font-bold">78%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Cards de Métricas (Total de Vendas e Total em Estoque - dados REAIS do seu DB) */}
+      <DashboardCards />
+
+      {/* Gráficos e Informações (usando dados fictícios por enquanto) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-pink-200/50">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Vendas por Dia</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart
+              data={salesData}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+              <XAxis dataKey="day" tickLine={false} axisLine={false} stroke="#888" />
+              <YAxis tickLine={false} axisLine={false} stroke="#888" />
+              <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+              <Line type="monotone" dataKey="vendas" stroke="#ec4899" activeDot={{ r: 8 }} strokeWidth={2} name="Vendas" />
+              <Line type="monotone" dataKey="meta" stroke="#8b5cf6" activeDot={{ r: 8 }} strokeWidth={2} name="Meta" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-pink-200/50">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Vendas por Categoria</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={categoryData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {categoryData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap justify-center gap-4 mt-4">
+            {categoryData.map((entry, index) => (
+              <div key={`legend-${index}`} className="flex items-center gap-2 text-sm text-gray-600">
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></span>
+                {entry.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Seção de Principais Produtos, Alertas, Ações Rápidas, Clientes VIP, Atividade Recente */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-pink-200/50">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Principais Produtos</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {topProducts.map((product, index) => (
+                <div
+                  key={index}
+                  className={`flex items-center p-4 rounded-xl shadow-md ${product.color} text-white`}
+                  style={{ background: `linear-gradient(to right, ${product.color.split(' ')[0]}, ${product.color.split(' ')[1]})` }}
+                >
+                  <span className="text-3xl mr-3">{product.image}</span>
+                  <div>
+                    <p className="font-semibold">{product.name}</p>
+                    <p className="text-sm opacity-90">{product.sales} vendas ({product.trend})</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-pink-200/50">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Alertas Importantes</h2>
+            <div className="space-y-3">
+              <AlertItem icon="🚨" text="Estoque baixo: Blusa de Seda Preta." color="bg-red-50/50 text-red-700" />
+              <AlertItem icon="💡" text="Nova promoção de verão ativada!" color="bg-yellow-50/50 text-yellow-700" />
+              <AlertItem icon="💬" text="Cliente solicitou troca do pedido #20230510." color="bg-blue-50/50 text-blue-700" />
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-pink-200/50">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Ações Rápidas</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <QuickAction icon="➕" text="Novo Produto" color="from-green-500 to-emerald-500" />
+              <QuickAction icon="📦" text="Gerenciar Estoque" color="from-blue-500 to-cyan-500" />
+              <QuickAction icon="📊" text="Ver Relatórios" color="from-orange-500 to-yellow-500" />
+              <QuickAction icon="✍️" text="Registrar Venda" color="from-purple-500 to-indigo-500" />
+              <QuickAction icon="✉️" text="Enviar Notificação" color="from-pink-500 to-rose-500" />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-pink-200/50">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Clientes VIP</h2>
+            <div className="space-y-3">
+              <VipClient name="Isabela Costa" purchases={78} avatar="👑" level="Ouro" />
+              <VipClient name="Fernanda Souza" purchases={62} avatar="💎" level="Prata" />
+              <VipClient name="Mariana Lima" purchases={55} avatar="🌟" level="Bronze" />
+            </div>
+          </div>
+
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-6 shadow-2xl border border-pink-200/50">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Atividade Recente</h2>
+            <div className="space-y-3">
+              <Activity time="10 min atrás" text="Novo pedido #20230512 realizado." icon="🛒" />
+              <Activity time="30 min atrás" text="Estoque de 'Saia Midi Floral' atualizado." icon="📦" />
+              <Activity time="1 hora atrás" text="Pagamento de pedido #20230511 confirmado." icon="💳" />
+              <Activity time="2 horas atrás" text="Cliente 'Ana Paula' cadastrada." icon="👤" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// app/(admin)/layout.tsx
+'use client';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 1024) setMenuOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Componente NavItem (mantido aqui para simplicidade, mas pode ser movido para _components)
+  function NavItem({ href, label, emoji, active = false }: { href: string; label: string; emoji: string; active?: boolean }) {
+    return (
+      <Link
+        href={href}
+        className={`flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium transition-colors duration-200 ${
+          active
+            ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg'
+            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-800'
+        }`}
+      >
+        <span className="text-lg">{emoji}</span>
+        {label}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="flex bg-gradient-to-br from-rose-50 via-pink-50 via-purple-50 to-indigo-100 min-h-screen relative overflow-hidden">
+      {/* Elementos decorativos de fundo */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-20 w-32 h-32 bg-gradient-to-r from-pink-300/20 to-rose-300/20 rounded-full blur-2xl animate-pulse"></div>
+        <div className="absolute top-60 right-40 w-40 h-40 bg-gradient-to-r from-purple-300/20 to-pink-300/20 rounded-full blur-2xl animate-pulse delay-200"></div>
+        <div className="absolute bottom-20 left-80 w-24 h-24 bg-gradient-to-r from-indigo-300/20 to-blue-300/20 rounded-full blur-2xl animate-pulse delay-400"></div>
+      </div>
+
+      {/* Botão para abrir/fechar menu em mobile */}
+      <button
+        className="lg:hidden fixed top-4 left-4 z-50 p-3 bg-pink-500 text-white rounded-full shadow-lg"
+        onClick={() => setMenuOpen(!menuOpen)}
+        aria-label="Toggle menu"
+      >
+        {menuOpen ? '✕' : '☰'}
+      </button>
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed top-0 left-0 h-full w-72 bg-white/80 backdrop-blur-xl shadow-xl rounded-r-3xl p-6 flex flex-col z-40 transition-transform duration-300 ease-in-out
+          ${menuOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
+      >
+        <div className="text-center mb-10 mt-4">
+          <h2 className="text-3xl font-extrabold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
+            VeuStore
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">Painel Administrativo</p>
+        </div>
+
+        <nav className="flex-1 space-y-3">
+          <NavItem href="/dashboard" label="Visão Geral" emoji="📊" active={true} /> {/* Marque o dashboard como ativo */}
+          <NavItem href="/dashboard/estoque" label="Estoque" emoji="📦" />
+          <NavItem href="/dashboard/caixa" label="Caixa" emoji="💰" />
+          <NavItem href="/dashboard/vendas" label="Vendas" emoji="🛍️" />
+          <NavItem href="/dashboard/relatorios" label="Relatórios" emoji="📈" />
+          <NavItem href="/dashboard/configuracoes" label="Configurações" emoji="⚙️" />
+        </nav>
+
+        <div className="mt-auto pt-6 border-t border-gray-200">
+          <NavItem href="/dashboard/logout" label="Sair" emoji="🚪" />
+        </div>
+      </aside>
+
+      {/* Conteúdo principal */}
+      <div className="flex-1 ml-0 lg:ml-72 flex flex-col">
+        {/* Header do Conteúdo Principal */}
+        <header className="p-6 bg-white/50 backdrop-blur-md border-b border-pink-100 flex justify-between items-center z-20">
+          <h1 className="text-2xl font-bold text-gray-800">Painel de Controle</h1>
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <button className="bg-pink-100 text-pink-500 p-2 rounded-xl">🔔</button>
+              <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-xs px-1 rounded-full animate-pulse">3</span>
+            </div>
+            <div className="flex items-center gap-2 bg-pink-200 rounded-xl p-2 border border-pink-100 shadow-sm">
+              <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-full flex items-center justify-center">👤</div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Verônica Basilio</p>
+                <p className="text-xs text-gray-400">Administradora</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-8 relative">
+          <div className="relative z-10">
+            {children} {/* <-- Este é o ponto crucial! O conteúdo da página atual será renderizado aqui. */}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+//app/api/produtos/[id]/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "../../../../lib/prisma";
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const id = Number(params.id);
+  const body = await req.json();
+
+  const produtoAtualizado = await prisma.produto.update({
+    where: { id },
+    data: {
+      nome: body.nome,
+      quantidade: body.quantidade,
+      preco: body.preco,
+    },
+  });
+
+  return NextResponse.json(produtoAtualizado);
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const id = Number(params.id);
+
+  await prisma.produto.delete({
+    where: { id },
+  });
+
+  return NextResponse.json({ message: "Produto excluído com sucesso" });
+}
+
+//app/api/produtos/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
+
+export async function GET() {
+   const produtos = await prisma.produto.findMany();
+//   return NextResponse.json(produtos);
+// }
+const produtosComAlerta = produtos.map((p) => ({
+    ...p,
+    alertaEstoque: p.quantidade <= 5, // alerta se 5 unidades ou menos
+  }));
+
+  return NextResponse.json(produtosComAlerta);
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+
+  const novoProduto = await prisma.produto.create({
+    data: {
+      nome: body.nome,
+      quantidade: body.quantidade,
+      preco: body.preco,
+    },
+  });
+
+  return NextResponse.json(novoProduto, { status: 201 });
+}
+
+//app/api/vendas/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "../../../lib/prisma";
+
+export async function GET() {
+  const vendas = await prisma.venda.findMany({
+    include: { produto: true },
+    orderBy: { criadoEm: "desc" },
+  });
+  return NextResponse.json(vendas);
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    // 1. Captura todos os campos necessários do corpo da requisição
+    const body = await req.json();
+    const { produtoId, quantidade, precoTotal, cliente, dataVenda, status } = body;
+
+    // Validação básica dos campos
+    if (!produtoId || !quantidade || !precoTotal || !cliente || !dataVenda || !status) {
+      return NextResponse.json(
+        { error: "Dados incompletos para registrar a venda." },
+        { status: 400 }
+      );
+    }
+
+    // 2. Verifica se o produto existe
+    const produtoAtual = await prisma.produto.findUnique({
+      where: { id: produtoId },
+    });
+
+    if (!produtoAtual) {
+      return NextResponse.json(
+        { error: "Produto não encontrado no estoque." },
+        { status: 404 }
+      );
+    }
+
+    // 3. Verifica estoque suficiente
+    if (produtoAtual.quantidade < quantidade) {
+      return NextResponse.json(
+        { error: `Estoque insuficiente! Disponível: ${produtoAtual.quantidade}` },
+        { status: 400 }
+      );
+    }
+
+    // 4. Cria a venda com todos os dados
+    const novaVenda = await prisma.venda.create({
+      data: {
+        produtoId,
+        quantidade,
+        preco: precoTotal, // Mapeia precoTotal do frontend para 'preco' no seu DB
+        cliente,
+        dataVenda,
+        status,
+        // criadoEm é gerado automaticamente pelo Prisma se for DateTime @default(now())
+      },
+    });
+
+    // 5. Atualiza o estoque do produto
+    await prisma.produto.update({
+      where: { id: produtoId },
+      data: {
+        quantidade: produtoAtual.quantidade - quantidade,
+      },
+    });
+
+    // 6. Retorna a venda criada com os dados do produto incluídos
+    const vendaComProduto = await prisma.venda.findUnique({
+      where: { id: novaVenda.id },
+      include: { produto: true },
+    });
+
+    return NextResponse.json(vendaComProduto, { status: 201 });
+  } catch (error) {
+    console.error("Erro no POST /api/vendas:", error);
+    return NextResponse.json(
+      { error: "Erro interno ao registrar venda." },
+      { status: 500 }
+    );
+  }
+}
+
+// TODO: Implementar o método PUT para atualização de vendas
+// export async function PUT(req: NextRequest) { /* ... */ }
+
+// TODO: Implementar o método DELETE para exclusão de vendas
+// export async function DELETE(req: NextRequest) { /* ... */ }
+// import { NextRequest, NextResponse } from "next/server";
+// import { prisma } from "../../../lib/prisma";
+
+// export async function GET() {
+//   const vendas = await prisma.venda.findMany({
+//     include: { produto: true },
+//     orderBy: { criadoEm: "desc" },
+//   });
+//   return NextResponse.json(vendas);
+// }
+
+// export async function POST(req: NextRequest) {
+//   try {
+//     const body = await req.json();
+//     const { produtoId, quantidade, preco } = body;
+
+//     // Verifica se o produto existe
+//     const produtoAtual = await prisma.produto.findUnique({
+//       where: { id: produtoId },
+//     });
+
+//     if (!produtoAtual) {
+//       return NextResponse.json(
+//         { error: "Produto não encontrado" },
+//         { status: 404 }
+//       );
+//     }
+
+//     if (produtoAtual.quantidade < quantidade) {
+//       return NextResponse.json(
+//         { error: "Estoque insuficiente para essa venda" },
+//         { status: 400 }
+//       );
+//     }
+
+//     // Cria a venda
+//     const novaVenda = await prisma.venda.create({
+//       data: { produtoId, quantidade, preco },
+//     });
+
+//     // Atualiza o estoque
+//     await prisma.produto.update({
+//       where: { id: produtoId },
+//       data: {
+//         quantidade: produtoAtual.quantidade - quantidade,
+//       },
+//     });
+
+//     // Retorna a venda com os dados do produto incluídos
+//     const vendaComProduto = await prisma.venda.findUnique({
+//       where: { id: novaVenda.id },
+//       include: { produto: true },
+//     });
+
+//     return NextResponse.json(vendaComProduto, { status: 201 });
+//   } catch (error) {
+//     console.error(error);
+//     return NextResponse.json(
+//       { error: "Erro ao registrar venda" },
+//       { status: 500 }
+//     );
+//   }
+// }
+// lib/prisma.ts
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: ['query'],
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+//prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Produto {
+  id         Int      @id @default(autoincrement())
+  nome       String
+  quantidade Int
+  preco      Decimal  @db.Decimal(10, 2)
+  criadoEm   DateTime @default(now())
+  vendas     Venda[]
+}
+
+model Caixa {
+  id        Int           @id @default(autoincrement())
+  descricao String
+  tipo      MovimentoTipo // ENTRADA ou SAÍDA
+  valor     Decimal       @db.Decimal(10, 2)
+  criadoEm  DateTime      @default(now())
+}
+model Venda {
+  id          Int      @id @default(autoincrement())
+  produto     Produto  @relation(fields: [produtoId], references: [id])
+  produtoId   Int
+  quantidade  Int
+  preco       Decimal  @db.Decimal(10, 2)
+  cliente     String   @default("Cliente Padrão") // <-- ADICIONADO VALOR PADRÃO
+  dataVenda   String   @default("2000-01-01")   // <-- ADICIONADO VALOR PADRÃO (uma data genérica)
+  status      String   @default("Concluída")   // <-- ADICIONADO VALOR PADRÃO
+  criadoEm    DateTime @default(now())
+}
+
+enum MovimentoTipo {
+  ENTRADA
+  SAIDA
+}
+

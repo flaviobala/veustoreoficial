@@ -1,0 +1,45 @@
+//prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+model Produto {
+  id         Int      @id @default(autoincrement())
+  nome       String
+  quantidade Int
+  preco      Decimal  @db.Decimal(10, 2)
+  criadoEm   DateTime @default(now())
+  vendas     Venda[]
+}
+
+model Caixa {
+  id        Int           @id @default(autoincrement())
+  descricao String
+  tipo      MovimentoTipo // ENTRADA ou SAÍDA
+  valor     Decimal       @db.Decimal(10, 2)
+  criadoEm  DateTime      @default(now())
+}
+model Venda {
+  id          Int      @id @default(autoincrement())
+  produto     Produto  @relation(fields: [produtoId], references: [id])
+  produtoId   Int
+  quantidade  Int
+  preco       Decimal
+  cliente     String   @default("Cliente Padrão")
+  dataVenda   DateTime @default(now())    // <-- corrigido para DateTime
+  status      String   @default("Concluída")
+  criadoEm    DateTime @default(now())
+}
+
+
+enum MovimentoTipo {
+  ENTRADA
+  SAIDA
+}
+
