@@ -2,11 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "../../../../lib/prisma";
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const id = Number(params.id);
+export async function PUT(req: NextRequest, context: { params: { id: string } }) {
+  const id = Number(context.params.id);
   const body = await req.json();
 
   const produtoAtualizado = await prisma.produto.update({
@@ -21,10 +18,8 @@ export async function PUT(
   return NextResponse.json(produtoAtualizado);
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const id = Number(params.id);
 
   await prisma.produto.delete({
